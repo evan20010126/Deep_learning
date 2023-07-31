@@ -214,7 +214,7 @@ def testing(model, criterion, dataloader):
     # print(f'Test Loss: {test_loss}, Test Accuracy: {accuracy}')
     return accuracy, test_loss
 
-'''
+# '''
 models = [
     # EEG_net(C = 2, T = 750, activation_layer=torch.nn.ReLU()).to(device=device),
     EEG_net(C = 2, T = 750, activation_layer=torch.nn.LeakyReLU()).to(device=device), # the best
@@ -268,6 +268,6 @@ optimizer = torch.optim.Adam(best_leaky_eeg.parameters(), lr=1e-3, weight_decay=
 epochs = 200 * 5 
 testing_acc, testing_loss = testing(best_leaky_eeg, criterion, test_loader)
 print(f"test acc: {testing_acc}, test loss: {testing_loss}")
-# '''
+'''
 
 
