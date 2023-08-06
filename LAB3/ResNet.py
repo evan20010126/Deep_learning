@@ -151,10 +151,12 @@ class ResNet152(torch.nn.Module):
 
         self.conv5_x = self._make_layer(bottleneck_block, filters*8, 3, stride=2)
 
-        self.GlobalAvgPooling = torch.nn.AdaptiveAvgPool2d((1,1))
+        # self.GlobalAvgPooling = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.GlobalAvgPooling = torch.nn.AvgPool2d(7, stride=1)
         self.Flatten = torch.nn.Flatten(1)
         self.dropout = torch.nn.Dropout(p = 0.5)
-        self.Dense = torch.nn.Linear(in_features=self.C, out_features=1, bias=True)
+        # self.Dense = torch.nn.Linear(in_features=self.C, out_features=1, bias=True)
+        self.Dense = torch.nn.Linear(in_features=49152, out_features=1, bias=True)
         self.Sigmoid = torch.nn.Sigmoid()
 
     def _make_layer(self, block, first_filters, num_blocks, stride):
@@ -268,10 +270,10 @@ class ResNet50(torch.nn.Module):
             bottleneck_block(filters * 4, first_filters=filters, strides=1), # stride=1 
         )
 
-        self.GlobalAvgPooling = torch.nn.AvgPool2d(7, stride=1)
+        self.GlobalAvgPooling = torch.nn.AdaptiveAvgPool2d((1,1))
         self.Flatten = torch.nn.Flatten(1)
-        self.dropout = torch.nn.Dropout(p = 0.5)
-        self.Dense = torch.nn.Linear(in_features=32768, out_features=1, bias=True)
+        # self.dropout = torch.nn.Dropout(p = 0.5)
+        self.Dense = torch.nn.Linear(in_features=filters * 4, out_features=1, bias=True)
         self.Sigmoid = torch.nn.Sigmoid()
     
     def _make_layer(self, block, first_filters, num_blocks, stride):

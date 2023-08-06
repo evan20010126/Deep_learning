@@ -191,7 +191,7 @@ if __name__ == "__main__":
     test_data = dataloader.LeukemiaLoader("new_dataset","test",  transform = transform_test) # convert type
     
 
-    train_dataloader = DataLoader(train_data, batch_size=32, shuffle=True)
+    train_dataloader = DataLoader(train_data, batch_size=8, shuffle=True)
     valid_dataloader = DataLoader(valid_data, batch_size=8, shuffle=False)
     test_dataloader = DataLoader(test_data, batch_size=2, shuffle=False)
     # plt.imshow(torch.transpose(next(iter(train_dataloader))[0][0], 0 , 2).numpy())
@@ -202,8 +202,7 @@ if __name__ == "__main__":
         # openai.ResNet18(1).to(device=device)
         # ResNet.ResNet18((3, None, None), filters=8).to(device=device),
         # ResNet.ResNet50((3, None, None), filters=2).to(device=device),
-        ResNet.ResNet50((3, None, None), filters=16).to(device=device),
-        # ResNet.ResNet152((3, None, None), filters=24).to(device=device)
+        ResNet.ResNet152((3, None, None), filters=24).to(device=device)
     ]
     training_paras = [
         # [lr, weight_decay, epochs, min_epoch]
@@ -211,7 +210,7 @@ if __name__ == "__main__":
     ]
 
     save_paths = [
-        'Resnet50-1'
+        'Resnet152-7'
     ]
 
     criterion = torch.nn.functional.binary_cross_entropy
@@ -229,14 +228,14 @@ if __name__ == "__main__":
             # testing_acc, testing_loss = testing(model, criterion, test_loader)
             # print(f"test acc: {testing_acc}, test loss: {testing_loss}")
             # plot_acc_loss(all_activation_history, epochs=training_paras[0][2], save_path=save_path)
-            plot_acc_loss(all_activation_history, epochs=done_epoch, save_path=save_path)
+            plot_acc_loss(all_activation_history, epochs=training_paras[0][2], save_path=save_path)
         except:
             model = best_model
             os.makedirs(f"./models/{save_path}")
             shutil.copy("main.py", f"./models/{save_path}/main.py")
             torch.save(model.state_dict(), f"./models/{save_path}/resnet18.pth")
             all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
-            plot_acc_loss(all_activation_history, epochs=done_epoch, save_path=save_path)
+            plot_acc_loss(all_activation_history, epochs=done_epoch+1, save_path=save_path)
             exit(0)
     # '''
     # -- test --
