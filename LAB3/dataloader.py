@@ -5,6 +5,7 @@ import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torchvision import transforms
 
 def getData(mode):
     if mode == 'train':
@@ -25,7 +26,7 @@ def getData(mode):
         return path, []
 
 class LeukemiaLoader(data.Dataset):
-    def __init__(self, root, mode):
+    def __init__(self, root, mode, transform=None):
         """
         Args:
             mode : Indicate procedure status(training or testing)
@@ -36,6 +37,7 @@ class LeukemiaLoader(data.Dataset):
         self.root = root
         self.img_name, self.label = getData(mode) # both are list
         self.mode = mode
+        self.transform = transform
         print("> Found %d images..." % (len(self.img_name)))  
 
     def __len__(self):
@@ -64,13 +66,18 @@ class LeukemiaLoader(data.Dataset):
         """
         path = self.root +  self.img_name[index]
         img = imageio.imread(path)
-        
-        label = self.label[index]
+        # print(img.shape) # ndarray(450, 450, 3)
 
-        img = img.astype(float) / 255 
-        img = img.reshape((img.shape[2], img.shape[0], img.shape[1]))
+        if self.transform:
+            img = self.transform(img)
+            # print(img.size()) # tensor(3, 450, 450)
+            img = img.float() / 255.0
         
-        return torch.from_numpy(img), label
+        if self.mode != 'test':
+            label = self.label[index]
+            return img, label
+        else:
+            return img
 
 # training_loader = LeukemiaLoader("new_dataset","train")
 # img, label = training_loader.__getitem__(0)
