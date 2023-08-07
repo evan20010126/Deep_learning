@@ -47,7 +47,7 @@ training_acc_history = list()
 training_loss_history = list()
 valid_acc_history = list()
 valid_loss_history = list()
-def train(model, criterion, optimizer, train_dataloader, valid_loader, epochs, min_epoch):
+def train(model, criterion, optimizer, train_dataloader, valid_loader, epochs, min_epoch, save_path):
     training_acc_history.clear()
     training_loss_history.clear()
     valid_acc_history.clear()
@@ -66,10 +66,10 @@ def train(model, criterion, optimizer, train_dataloader, valid_loader, epochs, m
             # print("batch_idx:", batch_idx)
             x_batch = x_batch.float().to(device)
             y_batch = y_batch.float().to(device)
-            optimizer.zero_grad()
             y_pred = model(x_batch)
             y_pred = y_pred.view(-1)
             loss = criterion(y_pred, y_batch)
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
@@ -111,8 +111,13 @@ def train(model, criterion, optimizer, train_dataloader, valid_loader, epochs, m
         valid_loss_history.append(valid_loss)
         global done_epoch
         done_epoch = epoch
-    all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
-    print(f"Last epoch: {all_activation_history[-1][0][-1], all_activation_history[-1][1][-1]} {all_activation_history[-1][2][-1]} {all_activation_history[-1][3][-1]}")
+    save_learning_curve(training_acc_history, save_path + 'train_acc')
+    save_learning_curve(valid_acc_history, save_path + 'valid_acc')
+    save_learning_curve(training_loss_history, save_path + 'train_loss')
+    save_learning_curve(valid_loss_history, save_path + 'valid_loss')
+    # PLOT
+    # all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
+    # print(f"Last epoch: {all_activation_history[-1][0][-1], all_activation_history[-1][1][-1]} {all_activation_history[-1][2][-1]} {all_activation_history[-1][3][-1]}")
 
 def evaluate(model, criterion, valid_dataloader):
     model.eval()
@@ -169,6 +174,12 @@ def save_result(csv_path, predict_result):
     new_df["label"] = predict_result
     new_df.to_csv("./your_student_id_resnet18.csv", index=False)
 
+def save_learning_curve(curves, save_path):
+    df = pd.read_csv("./learning_curve.csv")
+    df[save_path] = curves
+    df.to_csv("./learning_curve.csv", index=False)
+
+
 if __name__ == "__main__":
 
     transform_train = transforms.Compose([
@@ -186,12 +197,12 @@ if __name__ == "__main__":
         transforms.ToTensor()
     ])
     
-    train_data = dataloader.LeukemiaLoader("new_dataset","train", transform = transform_train)
-    valid_data = dataloader.LeukemiaLoader("new_dataset","valid", transform = transform_test) # convert type
-    test_data = dataloader.LeukemiaLoader("new_dataset","test",  transform = transform_test) # convert type
+    train_data = dataloader.LeukemiaLoader("new_dataset/","train", transform = transform_train)
+    valid_data = dataloader.LeukemiaLoader("new_dataset/","valid", transform = transform_test) # convert type
+    test_data = dataloader.LeukemiaLoader("new_dataset/","test",  transform = transform_test) # convert type
     
 
-    train_dataloader = DataLoader(train_data, batch_size=8, shuffle=True)
+    train_dataloader = DataLoader(train_data, batch_size=32, shuffle=True)
     valid_dataloader = DataLoader(valid_data, batch_size=8, shuffle=False)
     test_dataloader = DataLoader(test_data, batch_size=2, shuffle=False)
     # plt.imshow(torch.transpose(next(iter(train_dataloader))[0][0], 0 , 2).numpy())
@@ -202,15 +213,15 @@ if __name__ == "__main__":
         # openai.ResNet18(1).to(device=device)
         # ResNet.ResNet18((3, None, None), filters=8).to(device=device),
         # ResNet.ResNet50((3, None, None), filters=2).to(device=device),
-        ResNet.ResNet152((3, None, None), filters=24).to(device=device)
+        ResNet.ResNet152((3, None, None), filters=16).to(device=device)
     ]
     training_paras = [
         # [lr, weight_decay, epochs, min_epoch]
-        [1e-4, 0, 20, 0],
+        [1e-4, 1e-3, 100, 3],
     ]
 
     save_paths = [
-        'Resnet152-7'
+        'Linux-Resnet152-0'
     ]
 
     criterion = torch.nn.functional.binary_cross_entropy
@@ -221,21 +232,20 @@ if __name__ == "__main__":
         print(model)
         optimizer = torch.optim.Adam(model.parameters(), lr=training_para[0], weight_decay=training_para[1])
         try:
-            train(model, criterion, optimizer, train_dataloader, valid_dataloader, epochs=training_para[2], min_epoch = training_para[3])
+            train(model, criterion, optimizer, train_dataloader, valid_dataloader, epochs=training_para[2], min_epoch = training_para[3], save_path = save_path)
             model = best_model
             shutil.copy("main.py", f"./models/{save_path}/main.py")
             torch.save(model.state_dict(), f"./models/{save_path}/resnet18.pth")
-            # testing_acc, testing_loss = testing(model, criterion, test_loader)
-            # print(f"test acc: {testing_acc}, test loss: {testing_loss}")
+            # PLOT
             # plot_acc_loss(all_activation_history, epochs=training_paras[0][2], save_path=save_path)
-            plot_acc_loss(all_activation_history, epochs=training_paras[0][2], save_path=save_path)
         except:
             model = best_model
             os.makedirs(f"./models/{save_path}")
             shutil.copy("main.py", f"./models/{save_path}/main.py")
             torch.save(model.state_dict(), f"./models/{save_path}/resnet18.pth")
-            all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
-            plot_acc_loss(all_activation_history, epochs=done_epoch+1, save_path=save_path)
+            # PLOT
+            # all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
+            # plot_acc_loss(all_activation_history, epochs=done_epoch+1, save_path=save_path)
             exit(0)
     # '''
     # -- test --

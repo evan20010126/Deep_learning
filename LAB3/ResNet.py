@@ -156,7 +156,7 @@ class ResNet152(torch.nn.Module):
         self.Flatten = torch.nn.Flatten(1)
         self.dropout = torch.nn.Dropout(p = 0.5)
         # self.Dense = torch.nn.Linear(in_features=self.C, out_features=1, bias=True)
-        self.Dense = torch.nn.Linear(in_features=49152, out_features=1, bias=True)
+        self.Dense = torch.nn.Linear(in_features=32768, out_features=1, bias=True)
         self.Sigmoid = torch.nn.Sigmoid()
 
     def _make_layer(self, block, first_filters, num_blocks, stride):
