@@ -228,7 +228,7 @@ if __name__ == "__main__":
     test_data = dataloader.LeukemiaLoader(
         "new_dataset/", "test",  transform=transform_test)  # convert type
 
-    train_dataloader = DataLoader(train_data, batch_size=32, shuffle=True)
+    train_dataloader = DataLoader(train_data, batch_size=1024, shuffle=True)
     valid_dataloader = DataLoader(valid_data, batch_size=8, shuffle=False)
     test_dataloader = DataLoader(test_data, batch_size=32, shuffle=False)
     # plt.imshow(torch.transpose(next(iter(train_dataloader))[0][0], 0 , 2).numpy())
@@ -238,22 +238,22 @@ if __name__ == "__main__":
     models = [
         # openai.ResNet18(1).to(device=device)
         # ResNet.ResNet18((3, None, None), filters=8).to(device=device),
-        # ResNet.ResNet50((3, None, None), filters=2).to(device=device),
-        ResNet.ResNet152((3, None, None), filters=32).to(device=device)
+        ResNet.ResNet50((3, None, None), filters=4).to(device=device),
+        # ResNet.ResNet152((3, None, None), filters=32).to(device=device)
     ]
     training_paras = [
         # [lr, weight_decay, epochs, min_epoch]
-        [1e-4, 1e-4, 10, 3],
+        [1e-5, 1e-3, 1000, 3],
     ]
 
     save_paths = [
-        'Linux-Resnet152-4'
+        'Linux-Resnet50-6'
     ]
 
     criterion = torch.nn.functional.binary_cross_entropy
 
    # -- train --
-    '''
+    # '''
     for model, training_para, save_path in zip(models, training_paras, save_paths):
         print(model)
         optimizer = torch.optim.Adam(
@@ -277,9 +277,9 @@ if __name__ == "__main__":
             # all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
             # plot_acc_loss(all_activation_history, epochs=done_epoch+1, save_path=save_path)
             exit(0)
-    '''
-    # -- test --
     # '''
+    # -- test --
+    '''
     model = models[0]
     model.load_state_dict(torch.load(
         "./models/Linux-Resnet152-4/resnet18.pth"))
@@ -298,6 +298,6 @@ if __name__ == "__main__":
         predict_result = np.append(
             predict_result, y_pred.cpu().detach().numpy())
     save_result("resnet_152_test.csv", predict_result)
-    # '''
+    '''
 
     print("Good Luck :)")

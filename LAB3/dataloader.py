@@ -7,23 +7,34 @@ import numpy as np
 import torch
 from torchvision import transforms
 
+
 def getData(mode):
     if mode == 'train':
         df = pd.read_csv('train.csv')
         path = df['Path'].tolist()
         label = df['label'].tolist()
+        # count = len(label)/2
+        # try:
+        #     for i in range(len(label)):
+        #         if label[i] == 1 and count > 0:
+        #             del path[i]
+        #             del label[i]
+        #             count -= 1
+        # except:
+        #     pass
         return path, label
-    
+
     elif mode == "valid":
         df = pd.read_csv('valid.csv')
         path = df['Path'].tolist()
         label = df['label'].tolist()
         return path, label
-    
+
     else:
         df = pd.read_csv('resnet_18_test.csv')
         path = df['Path'].tolist()
         return path, []
+
 
 class LeukemiaLoader(data.Dataset):
     def __init__(self, root, mode, transform=None):
@@ -35,10 +46,10 @@ class LeukemiaLoader(data.Dataset):
             self.label (int or float list): Numerical list that store all ground truth label values.
         """
         self.root = root
-        self.img_name, self.label = getData(mode) # both are list
+        self.img_name, self.label = getData(mode)  # both are list
         self.mode = mode
         self.transform = transform
-        print("> Found %d images..." % (len(self.img_name)))  
+        print("> Found %d images..." % (len(self.img_name)))
 
     def __len__(self):
         """'return the size of dataset"""
@@ -64,7 +75,7 @@ class LeukemiaLoader(data.Dataset):
                          
             step4. Return processed image and label
         """
-        path = self.root +  self.img_name[index]
+        path = self.root + self.img_name[index]
         img = imageio.imread(path)
         # print(img.shape) # ndarray(450, 450, 3)
 
@@ -72,7 +83,7 @@ class LeukemiaLoader(data.Dataset):
             img = self.transform(img)
             # print(img.size()) # tensor(3, 450, 450)
             img = img.float() / 255.0
-        
+
         if self.mode != 'test':
             label = self.label[index]
             return img, label

@@ -183,7 +183,7 @@ class ResNet152(torch.nn.Module):
         self.GlobalAvgPooling = torch.nn.AdaptiveAvgPool2d((1, 1))
         # self.GlobalAvgPooling = torch.nn.AvgPool2d(7, stride=1)
         self.Flatten = torch.nn.Flatten(1)
-        self.dropout = torch.nn.Dropout(p=0.5)
+        self.dropout = torch.nn.Dropout(p=0.5, inplace=True)
         # self.Dense = torch.nn.Linear(in_features=self.C, out_features=1, bias=True)
         self.Dense = torch.nn.Linear(
             in_features=self.C, out_features=1, bias=True)
@@ -233,7 +233,7 @@ class ResNet152(torch.nn.Module):
 class ResNet50(torch.nn.Module):
     def __init__(self, input_shape, filters):
         super(ResNet50, self).__init__()
-        C, H, W = input_shape
+        self.C, _, _ = input_shape
 
         # self.conv0_x = torch.nn.Sequential(
         #     torch.nn.Conv2d(C, 8, (3,3), stride=1),
@@ -244,84 +244,36 @@ class ResNet50(torch.nn.Module):
         #     torch.nn.MaxPool2d((3,3), stride= 1),
         # )
         self.conv0_x = torch.nn.Sequential(
-            torch.nn.Conv2d(C, filters, (7, 7), stride=2),
+            torch.nn.Conv2d(self.C, filters, (7, 7), stride=2),
+            torch.nn.BatchNorm2d(filters, eps=1e-05,
+                                 momentum=0.1),
+            torch.nn.ReLU(inplace=True),
             torch.nn.MaxPool2d((3, 3), stride=2),
         )
-
         # self.conv1 = torch.nn.Conv2d(C, 64, (7,7), stride=2)
         # self.maxpooling = torch.nn.MaxPool2d((3,3), stride=2)
         # input (3, 450, 450)
-        self.conv2_x = torch.nn.Sequential(
-            # x1
-            bottleneck_block(filters, first_filters=filters,
-                             strides=1),  # stride=1 non-down sampling
-            # x2
-            bottleneck_block(filters*4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x3
-            bottleneck_block(filters*4, first_filters=filters,
-                             strides=1),  # stride=1
-        )
 
-        filters *= 2
+        self.C = filters
 
-        self.conv3_x = torch.nn.Sequential(
-            # x1
-            bottleneck_block(filters * 2, first_filters=filters,
-                             strides=2),  # stride=1 non-down sampling
-            # x2
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x3
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x4
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-        )
+        self.conv2_x = self._make_layer(bottleneck_block, filters, 3, stride=1)
 
-        filters *= 2
+        self.conv3_x = self._make_layer(
+            bottleneck_block, filters*2, 4, stride=2)
 
-        self.conv4_x = torch.nn.Sequential(
-            # x1
-            bottleneck_block(filters * 2, first_filters=filters,
-                             strides=2),  # stride=1 non-down sampling
-            # x2
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x3
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x4
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x5
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x6
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-        )
+        self.conv4_x = self._make_layer(
+            bottleneck_block, filters*4, 6, stride=2)
 
-        filters *= 2
-
-        self.conv5_x = torch.nn.Sequential(
-            # x1
-            bottleneck_block(filters * 2, first_filters=filters,
-                             strides=2),  # stride=1 non-down sampling
-            # x2
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-            # x3
-            bottleneck_block(filters * 4, first_filters=filters,
-                             strides=1),  # stride=1
-        )
+        self.conv5_x = self._make_layer(
+            bottleneck_block, filters*8, 3, stride=2)
 
         self.GlobalAvgPooling = torch.nn.AdaptiveAvgPool2d((1, 1))
+        # self.GlobalAvgPooling = torch.nn.AvgPool2d(7, stride=1)
         self.Flatten = torch.nn.Flatten(1)
-        # self.dropout = torch.nn.Dropout(p = 0.5)
+        self.dropout = torch.nn.Dropout(p=0.5, inplace=True)
+        # self.Dense = torch.nn.Linear(in_features=self.C, out_features=1, bias=True)
         self.Dense = torch.nn.Linear(
-            in_features=filters * 4, out_features=1, bias=True)
+            in_features=self.C, out_features=1, bias=True)
         self.Sigmoid = torch.nn.Sigmoid()
 
     def _make_layer(self, block, first_filters, num_blocks, stride):
@@ -338,7 +290,7 @@ class ResNet50(torch.nn.Module):
         # block(input_channel, first_filters, stride)
         layers = []
         layers.append(
-            block(self.C, first_filters=first_filters, stride=stride))
+            block(self.C, first_filters=first_filters, strides=stride))
 
         self.C = first_filters * 4
 
@@ -358,7 +310,7 @@ class ResNet50(torch.nn.Module):
         x = self.conv5_x(x)
         x = self.GlobalAvgPooling(x)
         x = self.Flatten(x)
-        # x = self.dropout(x)
+        x = self.dropout(x)
         x = self.Dense(x)
         x = self.Sigmoid(x)
         # print(x.shape)
