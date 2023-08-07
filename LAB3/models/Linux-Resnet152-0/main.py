@@ -76,11 +76,17 @@ def train(model, criterion, optimizer, train_dataloader, valid_loader, epochs, m
             training_loss += loss.item()
             total_samples += y_batch.size(0)
             
-            tmp = comapre_ans(y_pred, y_batch, 'probabiliy_sigmoid')
-            correct_predictions += tmp
 
-            if batch_idx%15 == 0:
-                print(f"BATCH EPOCH: {batch_idx}, 'BATCH ACC: {tmp/y_batch.size(0)}")
+            ###
+            y_pred = (y_pred >= 0.5).int()
+            correct_predictions += (y_pred == y_batch).sum().item()
+            ###
+            # tmp = comapre_ans(y_pred, y_batch, 'probabiliy_sigmoid')
+            # correct_predictions += tmp
+
+            # if batch_idx%15 == 0:
+            #     print(f"BATCH EPOCH: {batch_idx}, 'BATCH ACC: {tmp/y_batch.size(0)}")
+            ###
             # batch_acc = (predicted == y_pred).sum().item() / 16.0
             # if batch_idx%15 == 0:
             #     print('batch_idx', batch_idx, 'batch_acc', batch_acc)
@@ -221,7 +227,7 @@ if __name__ == "__main__":
     ]
 
     save_paths = [
-        'Linux-Resnet152-0'
+        'Linux-Resnet152-1'
     ]
 
     criterion = torch.nn.functional.binary_cross_entropy
