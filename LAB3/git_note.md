@@ -8,3 +8,6 @@ git commit -m "message"
 git push
 
 zip -r myZippedImages.zip images_folder
+
+- git lfs
+https://xuzhougeng.top/archives/upload-large-file-to-github

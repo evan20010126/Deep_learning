@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 from torchvision import transforms
 import torchvision
+import openai
 import numpy as np
 import shutil
 import os
@@ -18,32 +19,6 @@ print(torch.cuda.is_available())
 print(torch.cuda.device_count())
 torch.cuda.empty_cache()
 # Move your model and data to the GPU
-
-
-def plot_confusion_matrix(confusion_matrix, classes, normalize=False, title='Confusion Matrix', cmap=plt.cm.Blues):
-    if normalize:
-        confusion_matrix = confusion_matrix.astype(
-            'float') / confusion_matrix.sum(axis=1)[:, np.newaxis]
-
-    plt.matshow(confusion_matrix, interpolation='nearest', cmap=cmap)
-    plt.title(title)
-    plt.colorbar()
-
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-
-    fmt = '.2f' if normalize else 'd'
-    thresh = confusion_matrix.max() / 2.
-    for i in range(confusion_matrix.shape[0]):
-        for j in range(confusion_matrix.shape[1]):
-            plt.text(j, i, format(confusion_matrix[i, j], fmt),
-                     horizontalalignment="center",
-                     color="white" if confusion_matrix[i, j] > thresh else "black")
-
-    plt.ylabel('True Label')
-    plt.xlabel('Predicted Label')
-    plt.savefig(f"./models/learning_curve.jpg")
 
 
 def compare_ans(y_pred, y_groundTruth, mode):
@@ -156,8 +131,7 @@ def train(model, criterion, optimizer, train_dataloader, valid_loader, epochs, m
     save_learning_curve(training_loss_history, save_path + 'train_loss')
     save_learning_curve(valid_loss_history, save_path + 'valid_loss')
     # PLOT
-    all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(
-    ), training_loss_history.copy(), valid_loss_history.copy()])
+    # all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
     # print(f"Last epoch: {all_activation_history[-1][0][-1], all_activation_history[-1][1][-1]} {all_activation_history[-1][2][-1]} {all_activation_history[-1][3][-1]}")
 
 
@@ -214,6 +188,7 @@ def plot_acc_loss(all_activation_history, epochs, save_path):
     axs[1].legend(loc='upper left')
     plt.tight_layout()
     plt.savefig(f"./models/{save_path}/learning_curve.jpg")
+    plt.show()
 
 
 def save_result(csv_path, predict_result):
@@ -265,23 +240,23 @@ if __name__ == "__main__":
 
     models = [
         # openai.ResNet18(1).to(device=device)
-        ResNet.ResNet18((3, None, None), filters=8).to(device=device),
-        # ResNet.ResNet50((3, None, None), filters=4).to(device=device),
-        # ResNet.ResNet152((3, None, None), filters=4).to(device=device)
+        # ResNet.ResNet18((3, None, None), filters=8).to(device=device),
+        ResNet.ResNet50((3, None, None), filters=4).to(device=device),
+        # ResNet.ResNet152((3, None, None), filters=32).to(device=device)
     ]
     training_paras = [
         # [lr, weight_decay, epochs, min_epoch]
-        [1e-3, 1e-1, 10, 3],
+        [1e-5 * 4, 1e-3, 40, 3],
     ]
 
     save_paths = [
-        'Resnet18'
+        'Linux-Resnet50-8'
     ]
 
     criterion = torch.nn.functional.binary_cross_entropy
 
    # -- train --
-    '''
+    # '''
     for model, training_para, save_path in zip(models, training_paras, save_paths):
         print(model)
         optimizer = torch.optim.Adam(
@@ -294,8 +269,7 @@ if __name__ == "__main__":
             torch.save(model.state_dict(),
                        f"./models/{save_path}/resnet18.pth")
             # PLOT
-            plot_acc_loss(all_activation_history,
-                          epochs=training_paras[0][2], save_path=save_path)
+            # plot_acc_loss(all_activation_history, epochs=training_paras[0][2], save_path=save_path)
         except:
             model = best_model
             os.makedirs(f"./models/{save_path}")
@@ -306,84 +280,28 @@ if __name__ == "__main__":
             # all_activation_history.append([training_acc_history.copy(), valid_acc_history.copy(), training_loss_history.copy(), valid_loss_history.copy()])
             # plot_acc_loss(all_activation_history, epochs=done_epoch+1, save_path=save_path)
             exit(0)
-    '''
-    # -- test --
     # '''
+    # -- test --
+    '''
     model = models[0]
     model.load_state_dict(torch.load(
         f"./models/{save_paths[0]}/resnet18.pth"))
 
-    cm = None
-    first = 1
-    # for batch_idx, (x_batch, y_batch) in enumerate(train_dataloader):
-    #     x_batch = x_batch.float().to(device)
-    #     y_batch = y_batch.float().to(device)
-    #     y_pred = model(x_batch)
-    #     y_pred = y_pred.view(-1)
-    #     y_pred = (y_pred >= 0.5).int()
-    #     if first == 1:
-    #         cm = confusion_matrix(y_true=y_batch.cpu().numpy(),
-    #                               y_pred=y_pred.cpu().numpy())
-    #         first = 0
-    #     cm += confusion_matrix(y_true=y_batch.cpu().numpy(),
-    #                            y_pred=y_pred.cpu().numpy())
-    # tmp = cm[0][0]
-    # cm[0][0] = cm[0][1]
-    # cm[0][1] = tmp
-    # plt.figure(figsize=(15, 8))
-    # sns.heatmap(cm, square=True, annot=True, fmt='d',
-    #             linecolor='white', cmap='RdBu', linewidths=1.5, cbar=False)
-    # plt.xlabel('Pred', fontsize=20)
-    # plt.ylabel('True', fontsize=20)
-    # plt.savefig('train.jpg')
-
-    cm = None
-    first = 1
-    _all_data = 0
-    _correct_data = 0
-    for batch_idx, (x_batch, y_batch) in enumerate(valid_dataloader):
+    predict_result = np.array([])
+    for batch_idx, (x_batch) in enumerate(test_dataloader):
         x_batch = x_batch.float().to(device)
-        y_batch = y_batch.float().to(device)
+
         y_pred = model(x_batch)
         y_pred = y_pred.view(-1)
-        y_pred = (y_pred >= 0.5).int()
-        _all_data += y_pred.size(0)
-        _correct_data += compare_ans(y_pred, y_batch,
-                                     mode='probabiliy_sigmoid')
-        if first == 1:
-            cm = confusion_matrix(y_true=y_batch.cpu().numpy(),
-                                  y_pred=y_pred.cpu().numpy())
-            first = 0
-        cm += confusion_matrix(y_true=y_batch.cpu().numpy(),
-                               y_pred=y_pred.cpu().numpy())
-    
-    ac = _correct_data / _all_data
-    tmp = cm[0][0]
-    cm[0][0] = cm[0][1]
-    cm[0][1] = tmp
-    plt.figure(figsize=(15, 8))
-    sns.heatmap(cm, square=True, annot=True, fmt='d',
-                linecolor='white', cmap='RdBu', linewidths=1.5, cbar=False)
-    plt.xlabel('Pred', fontsize=20)
-    plt.ylabel('True', fontsize=20)
-    plt.savefig('valid.jpg')
 
-    print(f"valid_acc = {}")
-    # predict_result = np.array([])
-    # for batch_idx, (x_batch) in enumerate(test_dataloader):
-    #     x_batch = x_batch.float().to(device)
+        zero = torch.zeros_like(y_pred)
+        one = torch.ones_like(y_pred)
+        y_pred = torch.where(y_pred > 0.5, one, y_pred)
+        y_pred = torch.where(y_pred < 0.5, zero, y_pred)
+        predict_result = np.append(
+            predict_result, y_pred.cpu().detach().numpy())
+    save_result("resnet_50_test.csv", predict_result)
 
-    #     y_pred = model(x_batch)
-    #     y_pred = y_pred.view(-1)
-
-    #     zero = torch.zeros_like(y_pred)
-    #     one = torch.ones_like(y_pred)
-    #     y_pred = torch.where(y_pred > 0.5, one, y_pred)
-    #     y_pred = torch.where(y_pred < 0.5, zero, y_pred)
-    #     predict_result = np.append(
-    #         predict_result, y_pred.cpu().detach().numpy())
-    # save_result("resnet_50_test.csv", predict_result)
-
-    # '''
+    '''
 
     print("Good Luck :)")

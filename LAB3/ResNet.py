@@ -12,13 +12,13 @@ class bottleneck_block(torch.nn.Module):
             # Batch Normalization
             torch.nn.BatchNorm2d(first_filters, eps=1e-05,
                                  momentum=0.1),
-            torch.nn.ReLU(inplace=True),
+            torch.nn.LeakyReLU(inplace=True),
             torch.nn.Conv2d(first_filters, first_filters,
                             kernel_size=(3, 3), stride=1, padding=1),
             # Batch Normalization
             torch.nn.BatchNorm2d(first_filters, eps=1e-05,
                                  momentum=0.1),
-            torch.nn.ReLU(inplace=True),
+            torch.nn.LeakyReLU(inplace=True),
             torch.nn.Conv2d(first_filters, first_filters*4,
                             kernel_size=(1, 1), stride=1),
         )
@@ -95,8 +95,8 @@ class ResNet18(torch.nn.Module):
             torch.nn.MaxPool2d((3, 3), stride=2),
         )
 
-        # self.conv1 = torch.nn.Conv2d(C, 64, (7,7), stride=2)
-        # self.maxpooling = torch.nn.MaxPool2d((3,3), stride=2)
+        # self.conv1 = torch.nn.Conv2d(C, 64, (7, 7), stride=2)
+        # self.maxpooling = torch.nn.MaxPool2d((3, 3), stride=2)
         # input (3, 450, 450)
         self.conv2_x = torch.nn.Sequential(
             # stride=1 non-down sampling
@@ -160,7 +160,7 @@ class ResNet152(torch.nn.Module):
             torch.nn.Conv2d(self.C, filters, (7, 7), stride=2),
             torch.nn.BatchNorm2d(filters, eps=1e-05,
                                  momentum=0.1),
-            torch.nn.ReLU(inplace=True),
+            torch.nn.LeakyReLU(inplace=True),
             torch.nn.MaxPool2d((3, 3), stride=2),
         )
         # self.conv1 = torch.nn.Conv2d(C, 64, (7,7), stride=2)
@@ -247,7 +247,7 @@ class ResNet50(torch.nn.Module):
             torch.nn.Conv2d(self.C, filters, (7, 7), stride=2),
             torch.nn.BatchNorm2d(filters, eps=1e-05,
                                  momentum=0.1),
-            torch.nn.ReLU(inplace=True),
+            torch.nn.LeakyReLU(inplace=True),
             torch.nn.MaxPool2d((3, 3), stride=2),
         )
         # self.conv1 = torch.nn.Conv2d(C, 64, (7,7), stride=2)
