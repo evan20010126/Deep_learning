@@ -12,6 +12,7 @@ __all__ = [
     "Label_Encoder"
 ]
 
+
 class Generator(nn.Sequential):
     def __init__(self, input_nc, output_nc):
         super(Generator, self).__init__(
@@ -24,12 +25,11 @@ class Generator(nn.Sequential):
             DepthConvBlock(input_nc//8, input_nc//8),
             nn.Conv2d(input_nc//8, 3, 1)
         )
-        
+
     def forward(self, input):
         return super().forward(input)
-    
-    
-    
+
+
 class RGB_Encoder(nn.Sequential):
     def __init__(self, in_chans, out_chans):
         super(RGB_Encoder, self).__init__(
@@ -40,15 +40,12 @@ class RGB_Encoder(nn.Sequential):
             ResidualBlock(out_chans//4, out_chans//2),
             DepthConvBlock(out_chans//2, out_chans//2),
             nn.Conv2d(out_chans//2, out_chans, 3, padding=1),
-        )  
-        
+        )
+
     def forward(self, image):
         return super().forward(image)
-    
 
-    
-    
-    
+
 class Label_Encoder(nn.Sequential):
     def __init__(self, in_chans, out_chans, norm_layer=nn.BatchNorm2d):
         super(Label_Encoder, self).__init__(
@@ -57,12 +54,12 @@ class Label_Encoder(nn.Sequential):
             norm_layer(out_chans//2),
             nn.LeakyReLU(True),
             ResidualBlock(in_ch=out_chans//2, out_ch=out_chans)
-        )  
-        
+        )
+
     def forward(self, image):
         return super().forward(image)
-    
-    
+
+
 class Gaussian_Predictor(nn.Sequential):
     def __init__(self, in_chans=48, out_chans=96):
         super(Gaussian_Predictor, self).__init__(
@@ -74,10 +71,13 @@ class Gaussian_Predictor(nn.Sequential):
             nn.LeakyReLU(True),
             nn.Conv2d(out_chans, out_chans*2, kernel_size=1)
         )
-        
+
     def reparameterize(self, mu, logvar):
         # TODO
-        raise NotImplementedError
+        std = torch.exp(0.5 * logvar)
+        epsilon = torch.randn_like(std)
+        z = mu + epsilon * std
+        return z
 
     def forward(self, img, label):
         feature = torch.cat([img, label], dim=1)
@@ -86,8 +86,8 @@ class Gaussian_Predictor(nn.Sequential):
         z = self.reparameterize(mu, logvar)
 
         return z, mu, logvar
-    
-    
+
+
 class Decoder_Fusion(nn.Sequential):
     def __init__(self, in_chans=48, out_chans=96):
         super().__init__(
@@ -98,14 +98,11 @@ class Decoder_Fusion(nn.Sequential):
             DepthConvBlock(in_chans//2, out_chans//2),
             nn.Conv2d(out_chans//2, out_chans, 1, 1)
         )
-        
+
     def forward(self, img, label, parm):
         feature = torch.cat([img, label, parm], dim=1)
         return super().forward(feature)
-    
 
-    
-        
-    
+
 if __name__ == '__main__':
     pass

@@ -1,0 +1,2 @@
+python Trainer.py --DR LAB4_dataset --save_root ./origin6 --fast_train --kl_anneal_ratio 0 --batch_size 3
+python Tester.py --DR LAB4_dataset --save_root ./origin --ckpt_path origin/epoch=69.ckpt
