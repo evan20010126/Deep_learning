@@ -1,6 +1,11 @@
 python Trainer.py --DR LAB4_dataset --save_root ./modify2/ --fast_train --kl_anneal_ratio 1 --kl_anneal_type Without
 python Tester.py --DR LAB4_dataset --save_root ./modify2/epoch55 --ckpt_path modify2/epoch=55.ckpt
+python Tester.py --DR LAB4_dataset --save_root ./modify2/epoch70 --ckpt_path modify2/epoch=70.ckpt
+
 71
+python Tester.py --DR LAB4_dataset --save_root ./modify2/epoch62 --ckpt_path modify2/epoch=62.ckpt
+
+
 
 Epoch: 0, batch_size: 2, [TeacherForcing: True, 1.0], [anneal_type: Without, beta: 1.0, cycle: 10, percent: 0.5], lr: 0.001, train_loss: 897.2401889805516 valid_loss: 24.412036022346
 Epoch: 1, batch_size: 2, [TeacherForcing: True, 1.0], [anneal_type: Without, beta: 1.0, cycle: 10, percent: 0.5], lr: 0.001, train_loss: 0.6113282604882978 valid_loss: 22.951796729961643

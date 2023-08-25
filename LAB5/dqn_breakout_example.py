@@ -17,20 +17,28 @@ from atari_wrappers import wrap_deepmind, make_atari
 
 class ReplayMemory(object):
     ## TODO ##
-    def __init__(self):
+    def __init__(self, capacity):
+        self.buffer = deque(maxlen=capacity)
+
+
+    def push(self, *transition):
+        # (state, action, reward, next_state, done)
+        # 每得到一個就append進來，再取出來練(抽樣)
+        self.buffer.append(tuple(map(tuple, transition)))
         
 
-
-    def push(self, state, action, reward, done):
-        """Saves a transition"""
-        
-
-    def sample(self):
+    def sample(self, batch_size, device):
         """Sample a batch of transitions"""
+        transitions = random.sample(self.buffer, batch_size)
+        # first, *transitions = *transitions,
+        # print(type(first))
+        return (torch.tensor(x, dtype=torch.float, device=device)
+                for x in zip(*transitions))
         
 
     def __len__(self):
-        return self.size
+        # return self.size
+        return len(self.buffer)
 
 
 class Net(nn.Module):
@@ -83,6 +91,7 @@ class DQN:
 
         ## TODO ##
         """Initialize replay buffer"""
+        self._memory = ReplayMemory(args.capacity)
         #self._memory = ReplayMemory(...)
 
         ## config ##
@@ -95,12 +104,23 @@ class DQN:
     def select_action(self, state, epsilon, action_space):
         '''epsilon-greedy based on behavior network'''
         ## TODO ##
+        if random.random() < epsilon:
+            return action_space.sample()  # Explore
+        else:
+            with torch.no_grad(): # 避免在選擇動作時，不會意外地計算梯度(training時才該做的事) => 不需要計算梯度，也不需要改變模型的參數。
+                # print(state.shape)
+                q_values = self._behavior_net(torch.from_numpy(state).unsqueeze(0).to(self.device))
+                # print("Q:" ,q_values) # Q: tensor([-0.1088, -0.0802,  0.0765, -0.0525], device='cuda:0')
+                return q_values.argmax().item()  # Exploit
+        # raise NotImplementedError
         
 
-    def append(self, state, action, reward, done):
+    def append(self, state, action, reward, next_state, done):
         ## TODO ##
         """Push a transition into replay buffer"""
         #self._memory.push(...)
+        self._memory.push(state, [action], [reward / 10], next_state,
+                            [int(done)])
 
     def update(self, total_steps):
         if total_steps % self.freq == 0:
@@ -110,13 +130,32 @@ class DQN:
 
     def _update_behavior_network(self, gamma):
         # sample a minibatch of transitions
-        state, action, reward, next_state, done = self._memory.sample()
+        state, action, reward, next_state, done = self._memory.sample(self.batch_size, self.device)
         ## TODO ##
+        # print("WARNING: \n" , state)
+        # print("WARNING: \n" , state.size())
+        
+        q_value = self._behavior_net(state).gather(1, action.type(torch.int64)) # unsqueeze: 一維變二維(與Q_value維度對應)
+
+        with torch.no_grad():
+            q_next = self._target_net(next_state).max(1)[0].unsqueeze(1)
+            q_target = reward + gamma * q_next * (1 - done)
+
+        criterion = nn.MSELoss()
+        loss = criterion(q_value, q_target)
+
+        # optimize
+        self._optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(self._behavior_net.parameters(), 5)
+        self._optimizer.step()
         
 
     def _update_target_network(self):
         '''update target network by copying from behavior network'''
         ## TODO ##
+        self._target_net.load_state_dict(self._behavior_net.state_dict())
+
         
 
     def save(self, model_path, checkpoint=False):
@@ -138,7 +177,9 @@ class DQN:
             self._target_net.load_state_dict(model['target_net'])
             self._optimizer.load_state_dict(model['optimizer'])
 
+max_ewma_reward = 0
 def train(args, agent, writer):
+    global max_ewma_reward
     print('Start Training')
     env_raw = make_atari('BreakoutNoFrameskip-v4')
     env = wrap_deepmind(env_raw)
@@ -150,7 +191,12 @@ def train(args, agent, writer):
         total_reward = 0
         state = env.reset()
         state, reward, done, _ = env.step(1) # fire first !!!
-
+        state = np.array(state)
+        # print(state.shape)
+        # print(type(state))
+        
+        state = np.transpose(state, axes=(2, 0, 1))
+        
         for t in itertools.count(start=1):
             if total_steps < args.warmup:
                 action = action_space.sample()
@@ -162,25 +208,33 @@ def train(args, agent, writer):
                 epsilon = max(epsilon, args.eps_min)
 
             # execute action
-            state, reward, done, _ = env.step(action)
-
+            next_state, reward, done, _ = env.step(action)
+            next_state = np.array(next_state)
+            next_state = np.transpose(next_state, axes=(2, 0, 1))
             ## TODO ##
             # store transition
             #agent.append(...)
+            agent.append(state, action, reward, next_state, done)
 
             if total_steps >= args.warmup:
                 agent.update(total_steps)
 
+            state = next_state
             total_reward += reward
-
-            if total_steps % args.eval_freq == 0:
-                """You can write another evaluate function, or just call the test function."""
-                test(args, agent, writer)
-                agent.save(args.model + "dqn_" + str(total_steps) + ".pt")
-
             total_steps += 1
+
+            # if total_steps % args.eval_freq == 0:
+            #     """You can write another evaluate function, or just call the test function."""
+            #     test(args, agent, writer)
+            #     agent.save(args.model + "dqn_" + str(total_steps) + ".pt")
+
             if done:
                 ewma_reward = 0.05 * total_reward + (1 - 0.05) * ewma_reward
+                
+                if ewma_reward > max_ewma_reward:
+                    agent.save(args.model + "dqn_" + str(total_steps) + ".pt") # save best
+                    max_ewma_reward = ewma_reward
+
                 writer.add_scalar('Train/Episode Reward', total_reward, episode)
                 writer.add_scalar('Train/Ewma Reward', ewma_reward, episode)
                 print('Step: {}\tEpisode: {}\tLength: {:3d}\tTotal reward: {:.2f}\tEwma reward: {:.2f}\tEpsilon: {:.3f}'
@@ -198,14 +252,18 @@ def test(args, agent, writer):
     
     for i in range(args.test_episode):
         state = env.reset()
+        state = np.array(state)
+        state = np.transpose(state, axes=(2, 0, 1))
         e_reward = 0
         done = False
 
         while not done:
             time.sleep(0.01)
-            env.render()
+            # env.render()
             action = agent.select_action(state, args.test_epsilon, action_space)
             state, reward, done, _ = env.step(action)
+            state = np.array(state)
+            state = np.transpose(state, axes=(2, 0, 1))
             e_reward += reward
 
         print('episode {}: {:.2f}'.format(i+1, e_reward))

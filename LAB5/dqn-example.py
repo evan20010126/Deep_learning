@@ -25,10 +25,12 @@ class ReplayMemory:
 
     def append(self, *transition):
         # (state, action, reward, next_state, done)
+        # 每得到一個就append進來，再取出來練(抽樣)
         self.buffer.append(tuple(map(tuple, transition)))
-
+        
     def sample(self, batch_size, device):
         '''sample a batch of transition tensors'''
+        # 隨機取不同episode出來練
         transitions = random.sample(self.buffer, batch_size)
         return (torch.tensor(x, dtype=torch.float, device=device)
                 for x in zip(*transitions))
@@ -36,24 +38,33 @@ class ReplayMemory:
 
 class Net(nn.Module):
     def __init__(self, state_dim=8, action_dim=4, hidden_dim=32):
-        super().__init__()
         ## TODO ##
-        raise NotImplementedError
+        super(Net, self).__init__()
+        self.part1 = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim),
+        )
 
     def forward(self, x):
         ## TODO ##
-        raise NotImplementedError
+        q_values = self.part1(x)
+        return q_values
 
 
-class DQN:
+class DQN: # Agent
     def __init__(self, args):
         self._behavior_net = Net().to(args.device)
         self._target_net = Net().to(args.device)
         # initialize target network
         self._target_net.load_state_dict(self._behavior_net.state_dict())
         ## TODO ##
-        # self._optimizer = ?
-        raise NotImplementedError
+        self._optimizer = torch.optim.Adam(self._behavior_net.parameters(), lr=args.lr)
+
         # memory
         self._memory = ReplayMemory(capacity=args.capacity)
 
@@ -66,8 +77,16 @@ class DQN:
 
     def select_action(self, state, epsilon, action_space):
         '''epsilon-greedy based on behavior network'''
-         ## TODO ##
-        raise NotImplementedError
+        # epsilon-greedy based: 有機會選擇最好的action，也有機會隨機探索
+        ## TODO ##
+        if random.random() < epsilon:
+            return action_space.sample()  # Explore
+        else:
+            with torch.no_grad(): # 避免在選擇動作時，不會意外地計算梯度(training時才該做的事) => 不需要計算梯度，也不需要改變模型的參數。
+                q_values = self._behavior_net(torch.from_numpy(state).to(self.device))
+                # print("Q:" ,q_values) # Q: tensor([-0.1088, -0.0802,  0.0765, -0.0525], device='cuda:0')
+                return q_values.argmax().item()  # Exploit
+        # raise NotImplementedError
 
     def append(self, state, action, reward, next_state, done):
         self._memory.append(state, [action], [reward / 10], next_state,
@@ -83,15 +102,28 @@ class DQN:
         # sample a minibatch of transitions
         state, action, reward, next_state, done = self._memory.sample(
             self.batch_size, self.device)
-
         ## TODO ##
+        '''
+        behavior_net得出各個action的Q值，利用action.unsqueeze得出這次選擇出的
+        Q values: 估計在特定狀態下，採取某個動作的預期累積獎勵
+        '''
+        # Hint.
         # q_value = ?
         # with torch.no_grad():
         #    q_next = ?
         #    q_target = ?
         # criterion = ?
         # loss = criterion(q_value, q_target)
-        raise NotImplementedError
+        # print(self._behavior_net(state))
+        q_value = self._behavior_net(state).gather(1, action.type(torch.int64)) # unsqueeze: 一維變二維(與Q_value維度對應)
+
+        with torch.no_grad():
+            q_next = self._target_net(next_state).max(1)[0].unsqueeze(1)
+            q_target = reward + gamma * q_next * (1 - done)
+
+        criterion = nn.MSELoss()
+        loss = criterion(q_value, q_target)
+
         # optimize
         self._optimizer.zero_grad()
         loss.backward()
@@ -101,7 +133,7 @@ class DQN:
     def _update_target_network(self):
         '''update target network by copying from behavior network'''
         ## TODO ##
-        raise NotImplementedError
+        self._target_net.load_state_dict(self._behavior_net.state_dict())
 
     def save(self, model_path, checkpoint=False):
         if checkpoint:
@@ -123,8 +155,9 @@ class DQN:
             self._target_net.load_state_dict(model['target_net'])
             self._optimizer.load_state_dict(model['optimizer'])
 
-
+max_ewma_reward = 0
 def train(args, env, agent, writer):
+    global max_ewma_reward
     print('Start Training')
     action_space = env.action_space
     total_steps, epsilon = 0, 1.
@@ -140,7 +173,7 @@ def train(args, env, agent, writer):
                 action = agent.select_action(state, epsilon, action_space)
                 epsilon = max(epsilon * args.eps_decay, args.eps_min)
             # execute action
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, info = env.step(action)
             # store transition
             agent.append(state, action, reward, next_state, done)
             if total_steps >= args.warmup:
@@ -151,6 +184,9 @@ def train(args, env, agent, writer):
             total_steps += 1
             if done:
                 ewma_reward = 0.05 * total_reward + (1 - 0.05) * ewma_reward
+                if ewma_reward > max_ewma_reward:
+                    agent.save('best_' + args.model) # save best
+                    max_ewma_reward = ewma_reward
                 writer.add_scalar('Train/Episode Reward', total_reward,
                                   total_steps)
                 writer.add_scalar('Train/Ewma Reward', ewma_reward,
@@ -174,12 +210,26 @@ def test(args, env, agent, writer):
         env.seed(seed)
         state = env.reset()
         ## TODO ##
+        # Hint
         # ...
         #     if done:
         #         writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
         #         ...
-        raise NotImplementedError
+        for t in itertools.count(start=1):
+            action = agent.select_action(state, epsilon, action_space)
+            next_state, reward, done, _ = env.step(action)
+            total_reward += reward
+
+            state = next_state
+
+            if done:
+                writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
+                writer.add_scalar('Test/Episode Length', t, n_episode)
+                print(f'Episode {n_episode}: Total Reward = {total_reward}, Length = {t}')
+                rewards.append(total_reward)
+                break
     print('Average Reward', np.mean(rewards))
+    writer.add_scalar('Test/Average Reward', np.mean(rewards))
     env.close()
 
 
@@ -191,7 +241,7 @@ def main():
     parser.add_argument('--logdir', default='log/dqn')
     # train
     parser.add_argument('--warmup', default=10000, type=int)
-    parser.add_argument('--episode', default=1200, type=int)
+    parser.add_argument('--episode', default=2500, type=int) # origin: 1200
     parser.add_argument('--capacity', default=10000, type=int)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--lr', default=.0005, type=float)
@@ -199,7 +249,7 @@ def main():
     parser.add_argument('--eps_min', default=.01, type=float)
     parser.add_argument('--gamma', default=.99, type=float)
     parser.add_argument('--freq', default=4, type=int)
-    parser.add_argument('--target_freq', default=100, type=int)
+    parser.add_argument('--target_freq', default=1000, type=int)
     # test
     parser.add_argument('--test_only', action='store_true')
     parser.add_argument('--render', action='store_true')
@@ -208,13 +258,13 @@ def main():
     args = parser.parse_args()
 
     ## main ##
-    env = gym.make('LunarLander-v2')
+    env = gym.make('LunarLander-v2') # 內有action_space
     agent = DQN(args)
     writer = SummaryWriter(args.logdir)
     if not args.test_only:
         train(args, env, agent, writer)
         agent.save(args.model)
-    agent.load(args.model)
+    agent.load('best_' + args.model)
     test(args, env, agent, writer)
 
 

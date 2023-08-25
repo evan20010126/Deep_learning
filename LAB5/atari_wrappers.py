@@ -237,7 +237,7 @@ class LazyFrames(object):
             self._out = np.concatenate(self._frames, axis=2)
             self._frames = None
         return self._out
-
+    
     def __array__(self, dtype=None):
         out = self._force()
         if dtype is not None:
@@ -260,7 +260,7 @@ def make_atari(env_id, max_episode_steps=400000):
     return env
 
 
-def wrap_deepmind(env, episode_life=False, clip_rewards=False, frame_stack=False, scale=False):
+def wrap_deepmind(env, episode_life=False, clip_rewards=False, frame_stack=True, scale=False):
     """Configure environment for DeepMind-style Atari."""
     if episode_life:
         env = EpisodicLifeEnv(env)

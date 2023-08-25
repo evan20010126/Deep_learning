@@ -39,18 +39,31 @@ class ReplayMemory:
     def sample(self, batch_size, device):
         '''sample a batch of transition tensors'''
         ## TODO ##
-        raise NotImplementedError
+        transitions = random.sample(self.buffer, batch_size)
+        # print('t', transitions)
+        # print(zip(*transitions))
+        return (torch.tensor(x, dtype=torch.float, device=device)
+                for x in zip(*transitions))
 
 
 class ActorNet(nn.Module):
     def __init__(self, state_dim=8, action_dim=2, hidden_dim=(400, 300)):
-        super().__init__()
         ## TODO ##
-        raise NotImplementedError
+        super(ActorＮet, self).__init__()
+        self.part1 = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim[0]),
+            nn.ReLU(),
+            nn.Linear(hidden_dim[0], hidden_dim[1]),
+            nn.ReLU(),
+            nn.Linear(hidden_dim[1], action_dim),
+            nn.Tanh(),
+        )
+        
 
     def forward(self, x):
         ## TODO ##
-        raise NotImplementedError
+        out = self.part1(x)
+        return out
 
 
 class CriticNet(nn.Module):
@@ -86,7 +99,8 @@ class DDPG:
         ## TODO ##
         # self._actor_opt = ?
         # self._critic_opt = ?
-        raise NotImplementedError
+        self._actor_opt = torch.optim.Adam(self._actor_net.parameters(), lr=args.lra)
+        self._critic_opt = torch.optim.Adam(self._critic_net.parameters(), lr=args.lrc)
         # action noise
         self._action_noise = GaussianNoise(dim=2)
         # memory
@@ -101,7 +115,13 @@ class DDPG:
     def select_action(self, state, noise=True):
         '''based on the behavior (actor) network and exploration noise'''
         ## TODO ##
-        raise NotImplementedError
+        state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device)
+        with torch.no_grad():
+            action = self._actor_net(state_tensor).cpu().numpy()
+            if noise:
+                noise = self._action_noise.sample()
+                action += noise
+            return np.clip(action, -1.0, 1.0)
 
     def append(self, state, action, reward, next_state, done):
         self._memory.append(state, action, [reward / 100], next_state,
@@ -134,7 +154,14 @@ class DDPG:
         #    q_target = ?
         # criterion = ?
         # critic_loss = criterion(q_value, q_target)
-        raise NotImplementedError
+        q_value = critic_net(state, action)
+        with torch.no_grad():
+            a_next = target_actor_net(next_state)
+            q_next = target_critic_net(next_state, a_next)
+            q_target = reward + gamma * (1 - done) * q_next
+        criterion = nn.MSELoss()
+        critic_loss = criterion(q_value, q_target)
+
         # optimize critic
         actor_net.zero_grad()
         critic_net.zero_grad()
@@ -146,7 +173,9 @@ class DDPG:
         ## TODO ##
         # action = ?
         # actor_loss = ?
-        raise NotImplementedError
+        action_pred = actor_net(state)
+        actor_loss = -critic_net(state, action_pred).mean()
+
         # optimize actor
         actor_net.zero_grad()
         critic_net.zero_grad()
@@ -158,7 +187,7 @@ class DDPG:
         '''update target network by _soft_ copying from behavior network'''
         for target, behavior in zip(target_net.parameters(), net.parameters()):
             ## TODO ##
-            raise NotImplementedError
+            target.data.copy_(tau * behavior.data + (1.0 - tau) * target.data)
 
     def save(self, model_path, checkpoint=False):
         if checkpoint:
@@ -188,8 +217,9 @@ class DDPG:
             self._actor_opt.load_state_dict(model['actor_opt'])
             self._critic_opt.load_state_dict(model['critic_opt'])
 
-
+max_ewma_reward = 0
 def train(args, env, agent, writer):
+    global max_ewma_reward
     print('Start Training')
     total_steps = 0
     ewma_reward = 0
@@ -214,6 +244,9 @@ def train(args, env, agent, writer):
             total_steps += 1
             if done:
                 ewma_reward = 0.05 * total_reward + (1 - 0.05) * ewma_reward
+                if ewma_reward > max_ewma_reward:
+                    agent.save("best_", args.model)
+                    max_ewma_reward = ewma_reward
                 writer.add_scalar('Train/Episode Reward', total_reward,
                                   total_steps)
                 writer.add_scalar('Train/Ewma Reward', ewma_reward,
@@ -234,13 +267,27 @@ def test(args, env, agent, writer):
         total_reward = 0
         env.seed(seed)
         state = env.reset()
+
         ## TODO ##
         # ...
         #     if done:
         #         writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
         #         ...
-        raise NotImplementedError
+        for t in itertools.count(start=1):
+            if args.render:
+                env.render()
+            action = agent.select_action(state, noise=False)
+            next_state, reward, done, _ = env.step(action)
+            total_reward += reward
+            state = next_state
+            if done:
+                writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
+                writer.add_scalar('Test/Episode Length', t, n_episode)
+                print(f'Episode {n_episode}: Total Reward = {total_reward}, Length = {t}')
+                rewards.append(total_reward)
+                break
     print('Average Reward', np.mean(rewards))
+    writer.add_scalar('Test/Average Reward', np.mean(rewards))
     env.close()
 
 
@@ -252,7 +299,7 @@ def main():
     parser.add_argument('--logdir', default='log/ddpg')
     # train
     parser.add_argument('--warmup', default=10000, type=int)
-    parser.add_argument('--episode', default=1200, type=int)
+    parser.add_argument('--episode', default=2000, type=int)
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--capacity', default=500000, type=int)
     parser.add_argument('--lra', default=1e-3, type=float)
@@ -272,7 +319,7 @@ def main():
     if not args.test_only:
         train(args, env, agent, writer)
         agent.save(args.model)
-    agent.load(args.model)
+    agent.load('best_', args.model)
     test(args, env, agent, writer)
 
 
