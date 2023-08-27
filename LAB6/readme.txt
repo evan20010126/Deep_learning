@@ -25,3 +25,6 @@ For example:
 4. evlauator.py, checkpoint.pth
 Here are the pretrained classifier model's script and its weight for evaluating your synthetic images.
 More detail can be found in the script file.
+
+https://huggingface.co/docs/diffusers/tutorials/basic_training
+https://colab.research.google.com/github/huggingface/diffusion-models-class/blob/main/unit2/02_class_conditioned_diffusion_model_example.ipynb#scrollTo=X-5PgvGzMUyt
