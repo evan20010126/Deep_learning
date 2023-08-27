@@ -11,7 +11,8 @@ from torchvision import transforms
 import dataloader
 
 test_only = True
-model_path = 'second_model'
+load_model_parameters = False
+model_path = 'third_model'
 batchsize = 16
 n_epochs = 50
 num_train_timesteps = 1000
@@ -101,6 +102,10 @@ opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 losses = []
 
+if load_model_parameters:
+  model.load_state_dict(torch.load(f'./{model_path}.pt'))
+  model_path = model_path + '_reload'
+
 if not test_only:
   # The training loop
   for epoch in range(n_epochs):
@@ -127,31 +132,34 @@ if not test_only:
           # Store the loss for later
           losses.append(loss.item())
   # View the loss curve
+  
   torch.save(model.state_dict(), f"{model_path}.pt")
   plt.plot(losses)
   plt.savefig(f'{model_path}.png')
+  print("Complete all training")
 else:
   model.load_state_dict(torch.load(f'./{model_path}.pt'))
 
   x = torch.randn(1, 3, 64, 64).to(device)
-  y = torch.tensor([[6, 13, 24]]).to(device)
+  y = torch.tensor([[13, 24, 24]]).to(device)
   # Sampling loop
   for i, t in tqdm(enumerate(noise_scheduler.timesteps)):
 
       # Get model pred
       with torch.no_grad():
           residual = model(x, t, y)  # Again, note that we pass in our labels y
-
       # Update sample with step
-      x = noise_scheduler.step(residual, t, x).prev_sample
+          x = noise_scheduler.step(residual, t, x).prev_sample
 
   # Show the results
-  print(x.detach().cpu().size())
+  # print(x.detach().cpu().size())
+  # print(torch.min(x.detach().cpu()))
+  # print(torch.max(x.detach().cpu())) # -1 ~ 1
+  # grid = torchvision.utils.make_grid((x.detach().cpu() + 1.0) / 2.0) # -1~1 mapping 到 0~1
+  # torchvision.utils.save_image(grid, f'{model_path}_test.png')
+  x = x.detach().cpu()
+  # x = transforms.ToPILImage()(x.squeeze(0))
+  # plt.imshow(x)
   fig, ax = plt.subplots(1, 1, figsize=(12, 12))
-  ax.imshow(torchvision.utils.make_grid(x.detach().cpu().clip(-1, 1), nrow=8)[0])
+  ax.imshow(torchvision.utils.make_grid(x.clip(-1, 1), nrow=8)[0])
   plt.savefig(f'{model_path}_test.png')
-    
-  # scheduler = DDPMScheduler.from_pretrained()
-  # scheduler.set_timesteps(50)
-
-  # model = UNet2DModel.from_pretrained()
