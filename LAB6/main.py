@@ -11,9 +11,9 @@ from torchvision import transforms
 import dataloader
 
 test_only = True
-model_path = 'first_model'
-batchsize = 8
-n_epochs = 10
+model_path = 'second_model'
+batchsize = 16
+n_epochs = 50
 num_train_timesteps = 1000
 noise_scheduler = DDPMScheduler(num_train_timesteps=num_train_timesteps, beta_schedule='squaredcos_cap_v2')
 torch.cuda.empty_cache()
@@ -24,6 +24,7 @@ print(f"Device: {device}")
 
 transform=transforms.Compose([
                                             transforms.ToPILImage(),
+                                            transforms.Resize((64,64)),
                                             transforms.RandomHorizontalFlip(),
                                             # transforms.Resize((64, 64)),  # Resize the image to your desired size
                                             transforms.ToTensor(),
@@ -40,24 +41,24 @@ class ClassConditionedUnet(nn.Module):
 
     # Self.model is an unconditional UNet with extra input channels to accept the conditioning information (the class embedding)
     self.model = UNet2DModel(
-        sample_size=64,           # the target image resolution
+        sample_size=(64, 64),           # the target image resolution
         in_channels=3 + 3, # Additional input channels for class cond.
         out_channels=3,           # the number of output channels
         layers_per_block=2,       # how many ResNet layers to use per UNet block
-        block_out_channels=(4, 8, 8), 
+        block_out_channels=(32, 64, 64), 
         # downsample_type='resnet',
         # upsample_type='resnet',
         down_block_types=( 
             "DownBlock2D",        # a regular ResNet downsampling block
-            "DownBlock2D",    # a ResNet downsampling block with spatial self-attention
-            "DownBlock2D",
+            "AttnDownBlock2D",    # a ResNet downsampling block with spatial self-attention
+            "AttnDownBlock2D",
         ), 
         up_block_types=(
-            "UpBlock2D", 
-            "UpBlock2D",      # a ResNet upsampling block with spatial self-attention
+            "AttnUpBlock2D", 
+            "AttnUpBlock2D",      # a ResNet upsampling block with spatial self-attention
             "UpBlock2D",          # a regular ResNet upsampling block
           ),
-        norm_num_groups=4
+        # norm_num_groups=4
         # down_block_types=( 
         #     "DownBlock2D",        # a regular ResNet downsampling block
         #     "AttnDownBlock2D",    # a ResNet downsampling block with spatial self-attention
@@ -132,7 +133,7 @@ if not test_only:
 else:
   model.load_state_dict(torch.load(f'./{model_path}.pt'))
 
-  x = torch.randn(1, 3, 240, 320).to(device)
+  x = torch.randn(1, 3, 64, 64).to(device)
   y = torch.tensor([[6, 13, 24]]).to(device)
   # Sampling loop
   for i, t in tqdm(enumerate(noise_scheduler.timesteps)):
