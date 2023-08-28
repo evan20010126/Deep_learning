@@ -65,25 +65,32 @@ class iclevrDataset(data.Dataset):
                 # print(img.size()) # tensor(3, 450, 450)
                 # img = img.float() / 255.0
 
-            # one_hot_label = torch.zeros(24)
-            # for item in label:
-            #     one_hot_label[self.label_map[item]] = 1.0
-            
-            one_hot_label = torch.zeros(3)
-            one_hot_label += 24
-            i = 0
+            # one_hot_version----------------
+            one_hot_label = torch.zeros(24)
             for item in label:
-                one_hot_label[i] = self.label_map[item]
-                i += 1
+                one_hot_label[self.label_map[item]] = 1.0
+            
+            # one_hot_label = torch.zeros(3)
+            # one_hot_label += 24
+            # i = 0
+            # for item in label:
+            #     one_hot_label[i] = self.label_map[item]
+            #     i += 1
 
             return img, one_hot_label.int()
         elif self.mode == 'test' or self.mode == 'new_test':
-            one_hot_label = torch.zeros(3)
-            one_hot_label += 24
-            i = 0
+            # one_hot_version----------------
+            label = self.labels[index]
+            one_hot_label = torch.zeros(24)
             for item in label:
-                one_hot_label[i] = self.label_map[item]
-                i += 1
+                one_hot_label[self.label_map[item]] = 1.0
+
+            # one_hot_label = torch.zeros(3)
+            # one_hot_label += 24
+            # i = 0
+            # for item in label:
+            #     one_hot_label[i] = self.label_map[item]
+            #     i += 1
             return one_hot_label.int()
         
         

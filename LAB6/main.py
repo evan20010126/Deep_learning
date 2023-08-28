@@ -9,11 +9,12 @@ from tqdm.auto import tqdm
 import json
 from torchvision import transforms
 import dataloader
+import evaluator
 
-test_only = False
-load_model_parameters = True
-model_path = 'third_model'
-batchsize = 16
+test_only = True
+load_model_parameters = False
+model_path = 'one_hot_version_best'
+batchsize = 8
 n_epochs = 50
 num_train_timesteps = 1000
 noise_scheduler = DDPMScheduler(num_train_timesteps=num_train_timesteps, beta_schedule='squaredcos_cap_v2')
@@ -26,10 +27,11 @@ print(f"Device: {device}")
 transform=transforms.Compose([
                                             transforms.ToPILImage(),
                                             transforms.Resize((64,64)),
-                                            transforms.RandomHorizontalFlip(),
+                                            # transforms.RandomHorizontalFlip(),
                                             # transforms.Resize((64, 64)),  # Resize the image to your desired size
                                             transforms.ToTensor(),
-                                            transforms.Normalize([0.5], [0.5]),
+                                            transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)),
+                                            # transforms.Normalize([0.5], [0.5]),
                                            ])
 dataset = dataloader.iclevrDataset("./iclevr/", 'train', transform)
 
@@ -38,17 +40,15 @@ class ClassConditionedUnet(nn.Module):
     super().__init__()
     
     # The embedding layer will map the class label to a vector of size class_emb_size
-    self.class_emb = nn.Embedding(num_classes + 1, class_emb_size)
+    # self.class_emb = nn.Embedding(num_classes class_emb_size)
 
     # Self.model is an unconditional UNet with extra input channels to accept the conditioning information (the class embedding)
     self.model = UNet2DModel(
         sample_size=(64, 64),           # the target image resolution
-        in_channels=3 + 3, # Additional input channels for class cond.
+        in_channels=3 + 24, # Additional input channels for class cond.
         out_channels=3,           # the number of output channels
         layers_per_block=2,       # how many ResNet layers to use per UNet block
         block_out_channels=(32, 64, 64), 
-        # downsample_type='resnet',
-        # upsample_type='resnet',
         down_block_types=( 
             "DownBlock2D",        # a regular ResNet downsampling block
             "AttnDownBlock2D",    # a ResNet downsampling block with spatial self-attention
@@ -59,17 +59,6 @@ class ClassConditionedUnet(nn.Module):
             "AttnUpBlock2D",      # a ResNet upsampling block with spatial self-attention
             "UpBlock2D",          # a regular ResNet upsampling block
           ),
-        # norm_num_groups=4
-        # down_block_types=( 
-        #     "DownBlock2D",        # a regular ResNet downsampling block
-        #     "AttnDownBlock2D",    # a ResNet downsampling block with spatial self-attention
-        #     "AttnDownBlock2D",
-        # ), 
-        # up_block_types=(
-        #     "AttnUpBlock2D", 
-        #     "AttnUpBlock2D",      # a ResNet upsampling block with spatial self-attention
-        #     "UpBlock2D",          # a regular ResNet upsampling block
-        #   ),
     )
 
   # Our forward method now takes the class labels as an additional argument
@@ -78,7 +67,7 @@ class ClassConditionedUnet(nn.Module):
     bs, ch, w, h = x.shape
     
     # class conditioning in right shape to add as additional input channels
-    class_labels = self.class_emb(class_labels) # Map to embedding dinemsion
+    # class_labels = self.class_emb(class_labels) # Map to embedding dinemsion ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     # class_cond = class_cond.view(bs, class_cond.shape[1], 1, 1).expand(bs, class_cond.shape[1], w, h)
     # x is shape (bs, 1, 28, 28) and class_cond is now (bs, 4, 28, 28)
@@ -112,6 +101,7 @@ if not test_only:
   best_loss = 10
   for epoch in range(n_epochs):
       print("Epoch: ", epoch)
+      total_loss = 0.0
       for x, label in tqdm(train_dataloader):
           
           # Get some data and prepare the corrupted version
@@ -134,10 +124,11 @@ if not test_only:
 
           # Store the loss for later
           losses.append(loss.item())
+          total_loss += loss.item()
 
-          if best_loss > loss.item():
-            torch.save(model.state_dict(), f"{model_path}_best.pt")
-            best_loss = loss.item()
+      if best_loss > total_loss:
+        torch.save(model.state_dict(), f"{model_path}_best.pt")
+        best_loss = total_loss
             
   # View the loss curve
   
@@ -147,9 +138,43 @@ if not test_only:
   print("Complete all training")
 else:
   model.load_state_dict(torch.load(f'./{model_path}.pt'))
+  dataset_test = dataloader.iclevrDataset("./iclevr/", 'test', None)
 
+  test_dataloader = DataLoader(
+    dataset=dataset_test, batch_size=batchsize)
+  eval_model = evaluator.evaluation_model()
+  # denormalize
+  transform=transforms.Compose([
+          transforms.Normalize((0, 0, 0), (1/0.5, 1/0.5, 1/0.5)),
+          transforms.Normalize((-0.5, -0.5, -0.5), (1, 1, 1)),
+      ])
+  total_acc = 0
+  round_num = 0
+  with torch.no_grad():
+      for label in test_dataloader:
+          round_num += 1
+          x = torch.randn(batchsize, 3, 64, 64).to(device)
+          label = label.to(device)
+          for i, t in tqdm(enumerate(noise_scheduler.timesteps)):
+              # print(label.size())
+              residual = model(x, t, label)
+              x = noise_scheduler.step(residual, t, x).prev_sample
+          acc = eval_model.eval(x, label)
+          total_acc += acc
+          print("acc: ", acc)
+  total_acc = total_acc / round_num
+  print("total_acc: "total_acc)
+
+  ### One-image
+  '''
   x = torch.randn(1, 3, 64, 64).to(device)
-  y = torch.tensor([[13, 24, 24]]).to(device)
+  # y = torch.tensor([[5, 13, 24]]).to(device)
+  y = torch.tensor([[0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0]]).to(device)
+  re_transform = transforms.Compose([
+                                            transforms.Normalize((0, 0, 0), (1/0.5, 1/0.5, 1/0.5)),
+                                            transforms.Normalize((-0.5, -0.5, -0.5), (1, 1, 1)),
+                                            transforms.ToPILImage(),
+                                           ])
   # Sampling loop
   for i, t in tqdm(enumerate(noise_scheduler.timesteps)):
 
@@ -166,8 +191,14 @@ else:
   # grid = torchvision.utils.make_grid((x.detach().cpu() + 1.0) / 2.0) # -1~1 mapping 到 0~1
   # torchvision.utils.save_image(grid, f'{model_path}_test.png')
   x = x.detach().cpu()
+  x = re_transform(x.squeeze(0))
+  plt.imshow(x)
   # x = transforms.ToPILImage()(x.squeeze(0))
   # plt.imshow(x)
-  fig, ax = plt.subplots(1, 1, figsize=(12, 12))
-  ax.imshow(torchvision.utils.make_grid(x.clip(-1, 1), nrow=8)[0])
+
+
+
+  # fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+  # ax.imshow(torchvision.utils.make_grid(x.clip(-1, 1), nrow=8)[0])
   plt.savefig(f'{model_path}_test.png')
+  '''
