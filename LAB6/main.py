@@ -10,8 +10,8 @@ import json
 from torchvision import transforms
 import dataloader
 
-test_only = True
-load_model_parameters = False
+test_only = False
+load_model_parameters = True
 model_path = 'third_model'
 batchsize = 16
 n_epochs = 50
@@ -103,12 +103,15 @@ opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 losses = []
 
 if load_model_parameters:
+  print("LOAD PRE MODEL")
   model.load_state_dict(torch.load(f'./{model_path}.pt'))
   model_path = model_path + '_reload'
 
 if not test_only:
   # The training loop
+  best_loss = 10
   for epoch in range(n_epochs):
+      print("Epoch: ", epoch)
       for x, label in tqdm(train_dataloader):
           
           # Get some data and prepare the corrupted version
@@ -131,6 +134,11 @@ if not test_only:
 
           # Store the loss for later
           losses.append(loss.item())
+
+          if best_loss > loss.item():
+            torch.save(model.state_dict(), f"{model_path}_best.pt")
+            best_loss = loss.item()
+            
   # View the loss curve
   
   torch.save(model.state_dict(), f"{model_path}.pt")
