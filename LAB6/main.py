@@ -13,9 +13,9 @@ import evaluator
 
 test_only = True
 load_model_parameters = False
-model_path = 'one_hot_version_best'
+model_path = 'one_hot_version_2'
 batchsize = 8
-n_epochs = 50
+n_epochs = 70
 num_train_timesteps = 1000
 noise_scheduler = DDPMScheduler(num_train_timesteps=num_train_timesteps, beta_schedule='squaredcos_cap_v2')
 torch.cuda.empty_cache()
@@ -48,17 +48,23 @@ class ClassConditionedUnet(nn.Module):
         in_channels=3 + 24, # Additional input channels for class cond.
         out_channels=3,           # the number of output channels
         layers_per_block=2,       # how many ResNet layers to use per UNet block
-        block_out_channels=(32, 64, 64), 
-        down_block_types=( 
-            "DownBlock2D",        # a regular ResNet downsampling block
-            "AttnDownBlock2D",    # a ResNet downsampling block with spatial self-attention
-            "AttnDownBlock2D",
-        ), 
+        block_out_channels = (128, 128, 256, 256, 512, 512), 
+        down_block_types=(
+            "DownBlock2D",  # a regular ResNet downsampling block
+            "DownBlock2D",
+            "DownBlock2D",
+            "DownBlock2D",
+            "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
+            "DownBlock2D",
+        ),
         up_block_types=(
-            "AttnUpBlock2D", 
-            "AttnUpBlock2D",      # a ResNet upsampling block with spatial self-attention
-            "UpBlock2D",          # a regular ResNet upsampling block
-          ),
+            "UpBlock2D",  # a regular ResNet upsampling block
+            "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
+            "UpBlock2D",
+            "UpBlock2D",
+            "UpBlock2D",
+            "UpBlock2D",
+        ),
     )
 
   # Our forward method now takes the class labels as an additional argument
@@ -163,7 +169,7 @@ else:
           total_acc += acc
           print("acc: ", acc)
   total_acc = total_acc / round_num
-  print("total_acc: "total_acc)
+  print("total_acc: ", total_acc)
 
   ### One-image
   '''
